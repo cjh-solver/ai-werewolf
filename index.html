@@ -550,6 +550,16 @@ body.is-day .stage-bg .shade::after{opacity:1}
 .bb-row.low .bb-tag{color:var(--text-3);background:rgba(255,255,255,.06)}
 .bb-row.wolf-heavy .bb-tag{color:#e0917f;background:rgba(207,68,51,.14)}
 .bb-row.good-heavy .bb-tag{color:#8fb8e0;background:rgba(96,138,205,.16)}
+/* 诊断条：平衡分桶下面那行细指标。
+   散票率和命中率必须并排看——一个是好人没谈拢，一个是好人整体站错边，
+   两个病灶的修法完全相反。 */
+.bb-diag{
+  display:flex;flex-wrap:wrap;gap:4px 12px;
+  padding:6px 0 8px;font-size:var(--f-micro);color:var(--text-3);
+  border-top:1px solid rgba(255,255,255,.04);
+}
+.bb-diag + .bb-row{border-top:none}
+.bb-diag b{color:var(--text-2);font-weight:700;font-variant-numeric:tabular-nums}
 .bb-foot{
   margin-top:var(--sp-2);font-size:var(--f-micro);line-height:1.6;color:var(--text-3);
 }
@@ -1568,6 +1578,7 @@ body.is-day .btn.primary:hover:not(:disabled){
 
 /* 移动端横向头像条 */
 .roster{display:none}
+.roster:empty{display:none}   // 没发牌前不出空条，别在首屏压一条边框
 
 /* ══════════ 押注台 ══════════ */
 .bet-dock{
@@ -2322,7 +2333,9 @@ body.is-day .bet-panel{
   .app{grid-template-columns:1fr;height:calc(100dvh - 56px - 46px)}
   .topbar{gap:10px;padding:0 12px}
   .stageinfo{gap:8px}
-  .stageinfo .metric,.stageinfo .sep{display:none}
+  /* 手机上只藏 Token 和筹码，天数与存活数保留——
+   * 打到第几天、还剩几个人是观战最基本的状态，不能不显示 */
+  .stageinfo .m-desk{display:none}
   #stopBtn,#exportBtn{display:none}
   #soundBtn{width:30px}
   .icon-btn{padding:6px 9px;font-size:12px}
@@ -2377,6 +2390,34 @@ body.is-day .bet-panel{
   .vote-row .v-name{width:50px}
   .msg.speech{padding:11px 13px}
   .msg.speech .s-body{font-size:13.6px;line-height:1.8}
+}
+/* 901-1180px 的三无真空区：左栏收起、roster 默认 display:none，
+   这个宽度原本整屏看不到"谁在场"。补一条顶部横条，样式与手机端同一套。 */
+@media (min-width:901px) and (max-width:1180px){
+  .roster{
+    display:flex;gap:9px;overflow-x:auto;padding:10px 14px 8px;z-index:2;
+    border-bottom:1px solid var(--line-soft);background:var(--ink-850);
+  }
+  .roster::-webkit-scrollbar{height:0}
+  .roster-item{flex-shrink:0;width:64px;text-align:center;cursor:pointer}
+  .roster-item svg{width:38px;height:38px;border-radius:50%;display:block;margin:0 auto}
+  .roster-item b{
+    display:block;font-size:9px;color:var(--text-3);margin-top:3px;font-weight:400;
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+  }
+  .roster-item i{
+    display:block;font-style:normal;font-size:7.8px;color:#6b7391;margin-top:1px;
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis;letter-spacing:0;
+  }
+  .roster-item.dead{opacity:.32}
+  .roster-item.speaking svg{box-shadow:0 0 0 2px rgba(217,169,75,.55)}
+}
+
+/* 操作条弹出时垫高记录栏底部，最后一条发言不再被压在卡片后面。
+   :has 不支持时退化为原状（压住但可滚动），不算坏。 */
+@supports selector(:has(*)){
+  .stage:has(.ask.show) .feed{padding-bottom:200px}
+  .feed{transition:padding-bottom .18s var(--ease)}
 }
 @media (max-width:430px){
   .brand-name{display:none}
@@ -2451,6 +2492,67 @@ body.is-day .bet-panel{
   font-family:var(--serif);font-size:10.5px;letter-spacing:.12em;opacity:.72;margin-block:10px;
 }
 
+/* ══════════ 死亡整屏震动 ══════════
+   deathBeat() 里早就在 app 上加了 .shake，但这条规则一直没写，
+   等于玩家死亡那一秒只有一层 flash 加爪痕，震动从来没发生过。 */
+@keyframes shakeHard{
+  0%,100%{transform:translate3d(0,0,0)}
+  12%{transform:translate3d(-6px,2px,0)}
+  28%{transform:translate3d(5px,-2px,0)}
+  44%{transform:translate3d(-4px,1px,0)}
+  60%{transform:translate3d(3px,-1px,0)}
+  76%{transform:translate3d(-2px,1px,0)}
+  90%{transform:translate3d(1px,0,0)}
+}
+.app.shake{animation:shakeHard .72s cubic-bezier(.36,.07,.19,.97) both}
+
+/* ══════════ 唱票实时票数 ══════════
+   updateLiveTally() 造了 7 个类，CSS 一个都没有，结果是一坨
+   无背景无排版的裸文字直接 append 进圆桌容器、压在地板上。
+   放在圆心：那里本来是"第 N 天 / 存活"，唱票时正好用得上。 */
+.rt-live{
+  position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);
+  width:min(232px,54%);z-index:4;pointer-events:none;
+  padding:11px 13px;border-radius:12px;
+  background:rgba(9,13,20,.84);border:1px solid rgba(217,169,75,.24);
+  box-shadow:0 10px 30px rgba(0,0,0,.46),inset 0 1px 0 rgba(255,235,190,.06);
+  animation:liveIn .22s var(--ease-enter) both;
+}
+@keyframes liveIn{
+  from{opacity:0;transform:translate(-50%,-50%) scale(.94)}
+  to{opacity:1;transform:translate(-50%,-50%) scale(1)}
+}
+.rt-table.has-live .rt-center{opacity:0}
+.rt-live-title{
+  font-size:9.5px;letter-spacing:.2em;color:var(--text-3);
+  font-weight:700;margin-bottom:8px;
+}
+.rl-row{display:flex;align-items:center;gap:7px;margin-top:5px;font-size:11px}
+.rl-name{
+  flex:0 0 auto;max-width:66px;color:var(--text-2);
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+}
+.rl-track{flex:1;height:4px;border-radius:2px;background:rgba(255,255,255,.07);overflow:hidden}
+.rl-track i{
+  display:block;height:100%;border-radius:2px;
+  background:linear-gradient(90deg,#7d3a2c,#b8452f);
+  transition:width .24s var(--ease);
+}
+.rl-num{flex:0 0 auto;font-weight:700;color:var(--gold);font-variant-numeric:tabular-nums}
+/* 领先的那一行高亮：一眼看得出谁要被投出去 */
+.rt-live-title + .rl-row .rl-track i{background:linear-gradient(90deg,#d9a94b,#f0c977)}
+.rt-live-title + .rl-row .rl-name{color:var(--gold)}
+
+/* ══════════ 选项禁用态 ══════════
+   毒药用完后 b.disabled = true，但 .ask-seat 没有 :disabled 规则，
+   按钮看着完全可点，点下去被 return 吃掉——纯无响应，像坏了。 */
+.ask-seat:disabled,
+.ask-seat:disabled:hover{
+  opacity:.36;cursor:not-allowed;
+  border-color:var(--line);background:var(--ink-600);color:var(--text-3);
+}
+.ask-seat:disabled:active{transform:none}
+
 </style>
 </head>
 <body>
@@ -2498,9 +2600,9 @@ body.is-day .bet-panel{
     <span class="sep"></span>
     <span class="metric" id="aliveText">存活 —</span>
     <span class="sep"></span>
-    <span class="metric" id="tokenText">Token 0</span>
-    <span class="sep"></span>
-    <span class="metric" id="chipText">筹码 <b>100</b></span>
+    <span class="metric m-desk" id="tokenText">Token 0</span>
+    <span class="sep m-desk"></span>
+    <span class="metric m-desk" id="chipText">筹码 <b>100</b></span>
   </div>
   <div class="topactions">
     <button class="icon-btn" id="hudBtn" title="收起两侧面板，只看牌桌（点牌桌背景也能收）">净桌</button>
@@ -2648,6 +2750,10 @@ body.is-day .bet-panel{
           <input type="checkbox" id="sheriffOn" checked> 第一天选警长（多一轮上警与投票）
         </label>
         <div class="hint" id="sheriffHint">警长票权 1.5 票，白天最后发言。开局多一次明确表态的机会，中盘不容易哑火。</div>
+        <label class="check" style="margin-top:var(--sp-2)">
+          <input type="checkbox" id="saveStackOn" checked> 同守同救算平安
+        </label>
+        <div class="hint" id="saveStackHint">守卫和女巫同时保下同一个人时算平安。取消勾选按标准规则"奶穿"处理，那个人照样会死。</div>
         <div class="hint" id="modeHint">观战模式：你只负责看、押注、翻别人的档案。</div>
       </div>
     </details>
@@ -3164,6 +3270,7 @@ function readCfg() {
     suppressThinking: $('suppressThinking') ? $('suppressThinking').checked : true,
     focusSpeak: $('focusSpeak') ? $('focusSpeak').checked : false,
     sheriff: $('sheriffOn') ? $('sheriffOn').checked : true,
+    saveStack: $('saveStackOn') ? $('saveStackOn').checked : true,
     stream: $('streamSpeech') ? $('streamSpeech').checked : true,
     autoIdentity: $('autoIdentity') ? $('autoIdentity').checked : true,
     mode: MODE,
@@ -3240,6 +3347,7 @@ function loadCfg() {
     if (c.suppressThinking != null && $('suppressThinking')) $('suppressThinking').checked = !!c.suppressThinking;
     if (c.focusSpeak != null && $('focusSpeak')) $('focusSpeak').checked = !!c.focusSpeak;
     if (c.sheriff != null && $('sheriffOn')) $('sheriffOn').checked = !!c.sheriff;
+    if (c.saveStack != null && $('saveStackOn')) $('saveStackOn').checked = !!c.saveStack;
     if (c.stream != null && $('streamSpeech')) $('streamSpeech').checked = !!c.stream;
     if (c.autoIdentity != null && $('autoIdentity')) $('autoIdentity').checked = !!c.autoIdentity;
     if (c.mode) MODE = c.mode === 'play' ? 'play' : 'watch';
@@ -3564,6 +3672,10 @@ function specStat(spec) {
       seats: new Set(),      // 本局坐了哪些座位
       wolves: 0, goods: 0,   // 当狼/当好人次数
       wins: 0,               // 赢的局数（按座位归属）
+      winsAsWolf: 0,         // 当狼赢的次数——跟"当好人赢"分开记才有意义
+      winsAsGood: 0,
+      estCalls: 0,           // 没拿到 usage、走字符估算的调用数
+      promptEst: 0, completionEst: 0,
       leaks: 0,              // 思考泄漏被抢救/丢弃的次数
       thin: 0                // 划水（没有具体指认）的次数
     };
@@ -3616,12 +3728,73 @@ function mergeLadder() {
         }
       }
     }
+
+    /* ---- 分桶：模式 / 难度 / 警长开关 ----
+       原来观战局和真人局的胜负混在同一个桶里，狼胜率 52% 到底是谁贡献的
+       无从判断——这是天梯结论最容易失真的地方。
+       警长按"开没开"分，不按"选出来没有"分：开了但没人上警也是 null。 */
+    const wolfWon = S.winner !== 'good';
+    const days = S.round || 1;
+    const bump = (bag, key) => {
+      if (!bag) return;
+      const t = bag[key] || (bag[key] = { games: 0, wolf: 0, days: 0 });
+      t.games++;
+      if (wolfWon) t.wolf++;
+      t.days += days;
+    };
+    b.byMode = b.byMode || {};
+    b.byDiff = b.byDiff || {};
+    b.bySheriff = b.bySheriff || {};
+    bump(b.byMode, (typeof MODE !== 'undefined' && MODE === 'play') ? 'play' : 'watch');
+    bump(b.byDiff, (typeof DIFF !== 'undefined' && DIFF) || 'standard');
+    bump(b.bySheriff, S.sheriffOn === false ? 'off' : 'on');
+
+    /* ---- 出局事件表 ----
+       只记"谁赢了"没法诊断。要判断平衡得知道：狼是死在夜里还是白天、
+       第一天的票准不准、女巫毒错多少、好人到底是怎么送掉的。 */
+    b.out = b.out || {
+      night: 0, poison: 0, poisonWolf: 0,
+      vote: 0, voteWolf: 0, d1: 0, d1Wolf: 0,
+      shoot: 0, shootWolf: 0, explode: 0
+    };
+    (S.seats || []).forEach(sp => {
+      if (!sp || sp.alive || !sp.outReason) return;
+      const w = isWolfRole(sp.role);
+      const why = sp.outReason;
+      if (why === '夜间被狼人袭击') b.out.night++;
+      else if (why === '夜间被毒杀') { b.out.poison++; if (w) b.out.poisonWolf++; }
+      else if (why === '狼人自爆') b.out.explode++;
+      else if (/带走/.test(why)) { b.out.shoot++; if (w) b.out.shootWolf++; }
+      else if (/放逐/.test(why)) {
+        b.out.vote++; if (w) b.out.voteWolf++;
+        /* 第一天放逐的命中率单独记：这是整套信息机制有没有用的第一道体检 */
+        if (sp.outRound === 1) { b.out.d1++; if (w) b.out.d1Wolf++; }
+      }
+    });
+
+    /* ---- 票型结构 ----
+       voteStat 一直在采，但全文件没有第二处读它。
+       散票率（最高票占有效票的比例）和命中率是两个完全不同的病灶：
+       一个是好人没谈拢，一个是好人整体站错边，修法相反。 */
+    const vs = S.voteStat || [];
+    if (vs.length) {
+      b.vote = b.vote || { rounds: 0, valid: 0, top: 0, ties: 0, pk: 0 };
+      vs.forEach(v => {
+        b.vote.rounds++;
+        b.vote.valid += v.valid || 0;
+        b.vote.top += v.top || 0;
+        if (v.tie) b.vote.ties++;
+        if (v.pk) b.vote.pk++;
+      });
+    }
   }
   SPEC_STATS.forEach((st, k) => {
     const d = l.models[k] || (l.models[k] = {
       key: k, provider: st.provider, model: st.model,
       calls: 0, prompt: 0, completion: 0, seats: 0,
-      wolves: 0, goods: 0, wins: 0, leaks: 0, thin: 0
+      wolves: 0, goods: 0, wins: 0, leaks: 0, thin: 0,
+      winsAsWolf: 0, winsAsGood: 0,
+      estCalls: 0, promptEst: 0, completionEst: 0
     });
     d.calls += st.calls;
     d.prompt += st.prompt;
@@ -3630,6 +3803,11 @@ function mergeLadder() {
     d.wolves += st.wolves;
     d.goods += st.goods;
     d.wins += st.wins;
+    d.winsAsWolf = (d.winsAsWolf || 0) + (st.winsAsWolf || 0);
+    d.winsAsGood = (d.winsAsGood || 0) + (st.winsAsGood || 0);
+    d.estCalls = (d.estCalls || 0) + (st.estCalls || 0);
+    d.promptEst = (d.promptEst || 0) + (st.promptEst || 0);
+    d.completionEst = (d.completionEst || 0) + (st.completionEst || 0);
     d.leaks += st.leaks;
     d.thin += st.thin;
   });
@@ -3650,6 +3828,42 @@ function trackUsage(u, spec) {
     st.calls++;
     st.prompt += u.prompt_tokens || 0;
     st.completion += u.completion_tokens || 0;
+  }
+}
+
+/* 中英混排的 token 粗估。中文约 0.75 token/字，英文约 3.6 字符/token。
+   只在服务端没给 usage 时兜底用，不追求精确，要的是量级不错。 */
+function estimateTokens(s) {
+  if (!s) return 0;
+  const t = String(s);
+  let cjk = 0;
+  for (let i = 0; i < t.length; i++) if (t.charCodeAt(i) > 0x2e80) cjk++;
+  return Math.round(cjk * 0.75 + (t.length - cjk) / 3.6);
+}
+
+/* 流式响应默认不带 usage，而白天发言（maxTokens 1100）全走流式——
+   账单里最大的一类调用原来完全没进统计，屏幕上那个 Token 数字只算了零头。
+   这里估个量级，单独计 estCalls，显示时加 ≈，不假装它是真实值。 */
+function trackEstimate(est, spec) {
+  if (!est) return;
+  const p = est.prompt || 0, c = est.completion || 0;
+  CALL_STATS.calls++;
+  CALL_STATS.prompt += p;
+  CALL_STATS.completion += c;
+  CALL_STATS.est = (CALL_STATS.est || 0) + 1;
+  const el = $('tokenText');
+  if (el) {
+    const n = CALL_STATS.prompt + CALL_STATS.completion;
+    el.innerHTML = 'Token <b>' + (CALL_STATS.est ? '≈' : '') + n.toLocaleString() + '</b>';
+  }
+  if (spec && spec.model) {
+    const st = specStat(spec);
+    st.calls++;
+    st.prompt += p;
+    st.completion += c;
+    st.estCalls++;
+    st.promptEst += p;
+    st.completionEst += c;
   }
 }
 
@@ -3808,7 +4022,14 @@ async function attemptStream(sp, base, body, onDelta, runId) {
   }
   push(true);
   if (!content) throw STREAM_FALLBACK;   // 流里没拿到正文，交给非流式重发
-  return { content, reasoning, finish, usage: null };
+  /* 流式没有 usage，回一份字符估算出去，让上层的账本至少不是零 */
+  const askText = (body && Array.isArray(body.messages))
+    ? body.messages.map(m => m && m.content).filter(x => typeof x === 'string').join('\n')
+    : '';
+  return {
+    content, reasoning, finish, usage: null,
+    est: { prompt: estimateTokens(askText), completion: estimateTokens(content) }
+  };
 }
 
 /* 任务级温度：机器决策（刀人/投票/验人/毒药/开枪）要的是确定性，
@@ -3955,7 +4176,12 @@ async function callLLM({ system, user, runId, maxTokens = 480, spec, temp, task,
           c = salvageSpeak(c) || '';
         }
         if (!c && r.reasoning) c = rescueFromThinking(r.reasoning);
-        if (c) return c;
+        if (c) {
+          /* 只有确认这次流式真的产出了正文才记账，
+             否则后面 STREAM_FALLBACK 会再走一遍非流式，重复计数 */
+          if (r.est) trackEstimate(r.est, sp);
+          return c;
+        }
         // 流里只有思考没有正文：退回非流式重发，走那边的重试与兜底
         throw STREAM_FALLBACK;
       } catch (e) {
@@ -4820,6 +5046,10 @@ function askHuman(kind, opts) {
           left--;
           if (left <= 0) {
             stopAskTimer();
+            /* 归零不能悄悄替玩家做决定。原来只是 answerAsk 一个默认值，
+               没声音也没提示，切个标签页回来票已经变成「弃」了。 */
+            SFX.warn();
+            toast(kind === 'witch' ? '时间到，今晚不用药' : '时间到，本轮按弃票处理');
             const dv = kind === 'chat' ? '' : kind === 'witch' ? { save: false, poison: null } : null;
             answerAsk(dv);
             return;
@@ -4914,6 +5144,7 @@ function askHuman(kind, opts) {
         '<button class="btn primary" id="askSave">用解药救 ' + (o.victimSeat || '') + ' 号</button>' +
         '<button class="btn ghost" id="askNone">不用药</button>';
       if (o.saveUsed) { foot.querySelector('#askSave').disabled = true; foot.querySelector('#askSave').textContent = '解药已用完'; }
+      else if (o.selfSaveBlocked) { foot.querySelector('#askSave').disabled = true; foot.querySelector('#askSave').textContent = '第二夜起不能自救'; }
       if (o.poisonUsed) body.querySelectorAll('[data-pick]').forEach(b => b.disabled = true);
       let armed = null;
       body.querySelectorAll('[data-pick]').forEach(b => {
@@ -4958,8 +5189,23 @@ function askHuman(kind, opts) {
         foot.innerHTML = '<button class="btn ghost" id="askPass">' + esc(o.passLabel) + '</button>';
         $('askPass').addEventListener('click', () => answerAsk(null));
       }
+      /* confirm：投票这类不可撤销、候选又排得密的操作走两次点击。
+         原来一下定案，可 11 个候选三列密排、按钮才 74px，误触邻座就是投错人，
+         而这块面板还正好压着你要读的发言记录。毒药早就做了二次确认，投票一直没做。 */
+      let armed = null;
       body.querySelectorAll('[data-pick]').forEach(b => {
-        b.addEventListener('click', () => answerAsk(Number(b.dataset.pick)));
+        b.addEventListener('click', () => {
+          const seat = Number(b.dataset.pick);
+          if (o.confirm && armed !== seat) {
+            armed = seat;
+            body.querySelectorAll('[data-pick]').forEach(x => x.classList.remove('arm'));
+            b.classList.add('arm');
+            tip.textContent = '再点一次 ' + seat + ' 号确认（换人直接点新的）';
+            SFX.tick();
+            return;
+          }
+          answerAsk(seat);
+        });
       });
     }
   });
@@ -5017,7 +5263,9 @@ function showDealCard(p) {
       '胜负：好人放逐全部狼人获胜；' +
       (S.winMode === 'parity' ? '狼人杀到存活人数与狼数持平就赢。' : '狼人杀光神职或杀光平民就赢。') + '<br>' +
       '出局不翻身份牌，死者的身份只在复盘时公开。<br>' +
-      '本局同守同救算平安：守卫和女巫同时保下同一个人，那个人不会死。<br>' +
+      (saveStackRescues()
+        ? '本局同守同救算平安：守卫和女巫同时保下同一个人，那个人不会死。<br>'
+        : '本局按标准规则判奶穿：守卫和女巫同时保下同一个人，两张保命牌互相抵消，那个人照样出局。<br>') +
       '被毒杀的人不能开枪。<br>' +
       (sheriffEnabled()
         ? '第一天先选警长：想当的人上警表态，全体投票。警长放逐票权 1.5 票，白天最后发言，出局后警徽消失。'
@@ -5104,7 +5352,7 @@ function renderNotes() {
   }).join('') || '<div>还没有投过票</div>';
 
   const outs = S.log.filter(l => l.kind === 'out' || l.kind === 'lastword')
-    .slice(-8).map(l => '<div>第 ' + l.round + ' 天 · ' + l.seat + ' 号 ' + esc(l.name) +
+    .slice(-8).map(l => '<div>第 ' + l.round + (l.night ? ' 夜' : ' 天') + ' · ' + l.seat + ' 号 ' + esc(l.name) +
       (l.kind === 'out' ? ' 出局' : ' 遗言') + '</div>').join('') || '<div>还没有人出局</div>';
 
   $('noteBody').innerHTML =
@@ -6086,7 +6334,7 @@ const TYPER = {
         el.textContent = text;
         // 去掉光标
         el.classList.remove('typing-caret');
-        scrollFeed(true);
+        scrollFeed(false);   // 打字机收尾不强拽：用户往上翻就让他翻
       }
     };
     el.textContent = '';
@@ -6197,14 +6445,14 @@ function msgSpeech(p, tag) {
       // 流式已经一路显示到这儿了，就不再补打字机
       if (alreadyStreamed) {
         bodyEl.textContent = plain;
-        scrollFeed(true);
+        scrollFeed(false);
         return;
       }
 
       // 快进、减少动效、文本太短，都不必逐字打
       if (FAST || REDUCED || plain.length < 20) {
         bodyEl.textContent = plain;
-        scrollFeed(true);
+        scrollFeed(false);
         return;
       }
       typer = TYPER.run(bodyEl, plain, TYPER.speedFor(plain.length));
@@ -7267,6 +7515,9 @@ function initGame(seats, specs) {
     round: 1,
     phase: 'setup',
     winMode: seats.length === 6 ? 'parity' : 'edge',
+    /* 警长机制是否开启（不是"选没选出来"）。天梯要按这个分桶回答
+       "警长到底有没有用"，用 S.sheriff 反推不了——开了但没人上警也是 null。 */
+    sheriffOn: sheriffEnabled(),
     news: [],
     history: [],
     votes: [],
@@ -7526,20 +7777,20 @@ async function nightPhase(id) {
       const planCands = goodsAlive.filter(s => s.alive);
       if (planCands.length >= 2) {
         const planSeats = planCands.map(s => s.seat);
-        const planVotes = await pool(planWolves, CFG.conc, async w =>
-          (await chooseSeat(w, id,
-            '【狼队白天归票】\n现在是第 ' + S.round + ' 夜，今晚的刀口已经定了。\n' +
-            publicState() +
-            '\n你的狼队友：' + wolvesAlive.filter(x => x.seat !== w.seat).map(x => x.seat + ' 号 ' + x.name).join('、') +
-            '\n\n再定一件事：白天投票时全队把票压到谁身上？不能选自己人。\n' +
-            '候选：' + planCands.map(s => s.seat + ' 号 ' + s.name).join('、') +
-            '\n只输出一个座位号。',
-            planSeats, w.spec, 'vote')).seat);
-        const ptally = new Map();
-        planVotes.filter(v => v != null).forEach(v => ptally.set(v, (ptally.get(v) || 0) + 1));
-        const ptop = topSeat(ptally);
-        if (ptop) {
-          S.wolfPlan = ptop.tie.length > 1 ? pick(ptop.tie) : ptop.seat;
+        /* 归票是队伍级共识，不是个人判断——一次调用由第一只 AI 狼代全队定，
+           替掉原来每狼一次的 pool。3 狼省 2 次/夜，12 人局一整局省约 10 次。
+           它的输出只进 prompt、从不展示给玩家，省掉没有观感损失。 */
+        const speaker = planWolves[0];
+        const chosen = (await chooseSeat(speaker, id,
+          '【狼队白天归票】\n现在是第 ' + S.round + ' 夜，今晚的刀口已经定了。\n' +
+          publicState() +
+          '\n你的狼队友：' + wolvesAlive.filter(x => x.seat !== speaker.seat).map(x => x.seat + ' 号 ' + x.name).join('、') +
+          '\n\n你是狼队今晚的发言代表，请替全队定一件事：白天投票时全队把票压到谁身上？不能选自己人。\n' +
+          '候选：' + planCands.map(s => s.seat + ' 号 ' + s.name).join('、') +
+          '\n只输出一个座位号。',
+          planSeats, speaker.spec, 'vote')).seat;
+        if (chosen != null) {
+          S.wolfPlan = chosen;
           godMsg('狼队商量好了，白天把票压给 ' + nameOf(S.wolfPlan), '🐺');
           packMsg('狼队商量好了，白天把票压给 ' + nameOf(S.wolfPlan), '🐺');
         }
@@ -7639,9 +7890,13 @@ async function nightPhase(id) {
         cands: poisonList,
         victimSeat: killSeat,
         saveUsed: witch.saveUsed,
-        poisonUsed: witch.poisonUsed
+        poisonUsed: witch.poisonUsed,
+        selfSaveBlocked: !!(victim && victim.seat === witch.seat && S.round > 1)
       });
-      if (r && r.save && !witch.saveUsed) { witch.saveUsed = true; saved = true; }
+      /* 真人这条路原来没有轮次判断，想几夜自救就几夜——AI 那边有 S.round === 1 的限制，
+         规则文案也写着首夜才能自救，只有真人例外。补上。 */
+      const humanSelfBlocked = !!(victim && victim.seat === witch.seat && S.round > 1);
+      if (r && r.save && !witch.saveUsed && !humanSelfBlocked) { witch.saveUsed = true; saved = true; }
       if (r && r.poison != null && !witch.poisonUsed) {
         const ps = parseSeat(String(r.poison), poisonList.map(s => s.seat));
         if (ps != null) { witch.poisonUsed = true; poisonSeat = ps; }
@@ -7701,19 +7956,33 @@ async function nightPhase(id) {
   }
   setProgress(0.72);
 
-  /* ---- 结算 ---- */
+  /* ---- 结算 ----
+     刀口判定：守卫挡住或女巫救下，任一成立就算活。
+     两个都成立时看「同守同救算平安」开关，关掉就按标准规则奶穿。 */
   await gate(id);
   const deaths = [];   // {seat, reason}
-
-  if (!saved && killSeat != null && guardSeat !== killSeat) {
-    deaths.push({ seat: killSeat, reason: 'wolf' });
+  const guarded = guardSeat != null && guardSeat === killSeat;
+  let knifed = killSeat;
+  if (knifed != null) {
+    const rescued = guarded || saved;
+    const stackKills = guarded && saved && !saveStackRescues();
+    if (rescued && !stackKills) knifed = null;
+    else if (stackKills) {
+      godMsg('守卫和女巫同时保了 ' + nameOf(knifed) + '，同守同救判奶穿，两张保命牌一起失效', '🛡️');
+    }
   }
-  if (poisonSeat != null && !(!saved && poisonSeat === killSeat)) {
-    deaths.push({ seat: poisonSeat, reason: 'poison' });
+  /* 同一人被刀又被毒：只死一次，死因按毒算。毒无解，猎人/狼王因此不能开枪，
+     这是标准裁法。原来去重时把死因记成 wolf，等于绕过了「被毒不能开枪」。 */
+  if (knifed != null && poisonSeat === knifed) {
+    deaths.push({ seat: knifed, reason: 'poison' });
+  } else {
+    if (knifed != null) deaths.push({ seat: knifed, reason: 'wolf' });
+    if (poisonSeat != null) deaths.push({ seat: poisonSeat, reason: 'poison' });
   }
 
   if (!deaths.length) {
-    if (guardSeat === killSeat) godMsg('守卫挡住了这一刀，' + nameOf(killSeat) + ' 存活', '🛡️');
+    if (guarded && saved) godMsg('守卫和女巫同时保了 ' + nameOf(killSeat) + '，这一刀没落地', '🛡️');
+    else if (guarded) godMsg('守卫挡住了这一刀，' + nameOf(killSeat) + ' 存活', '🛡️');
     S.news.push('昨夜是平安夜，无人出局。');
     S.history.push('第 ' + S.round + ' 夜：平安夜');
     msgEvent('🕯️', '昨夜平安，无人出局。', 'good');
@@ -7727,6 +7996,13 @@ async function nightPhase(id) {
       const line = '第 ' + S.round + ' 夜，' + p.seat + ' 号 ' + p.name + ' 出局。';
       S.news.push(line);
       S.history.push(line);
+      /* 夜间死讯必须进 S.log：记牌板的出局记录和断线续跑的记录重建都读 S.log，
+         只写 S.news 的话，第二夜以后被刀的人在两个面板里凭空消失。 */
+      S.log.push({
+        round: S.round, kind: 'out', night: true,
+        seat: p.seat, name: p.name,
+        text: d.reason === 'poison' ? '夜间被毒杀' : '夜间被狼人袭击'
+      });
       msgEvent('💀', line, 'hot death');
       deathBeat(d.reason === 'wolf' ? 'wolf' : 'poison');
       if (p.human) { lockView(false); setTimeout(() => SFX.warn(), 800); }
@@ -7849,6 +8125,17 @@ function sheriffEnabled() {
   const cb = $('sheriffOn');
   if (cb) return !!cb.checked;
   return !!(CFG && CFG.sheriff);
+}
+
+/* 同守同救是否算平安。同上，直接读 DOM。
+   两个版本在线上线下都有人玩：休闲娱乐局多在守+救叠加时保人一命，
+   标准局判"奶穿"——守卫和女巫的保命技叠在一起，刀口反而没人接得住。
+   做成开关而不是硬编码，是因为它同时是个强平衡旋钮：
+   判奶穿等于好人每晚少一条命，狼胜率会明显往上走。 */
+function saveStackRescues() {
+  const cb = $('saveStackOn');
+  if (cb) return !!cb.checked;
+  return true;
 }
 
 /* ════════════════════════════════════════════════════════════
@@ -8002,7 +8289,8 @@ async function sheriffElection(id) {
         title: '选警长',
         tip: '选一个你信得过的人当警长，他/她有 1.5 票',
         cands: voters.filter(s => allowed.includes(s.seat)),
-        passLabel: '弃票'
+        passLabel: '弃票',
+        confirm: allowed.length > 4
       });
     }
   }
@@ -8107,6 +8395,8 @@ async function dayPhase(id) {
   await gate(id);
   const baseOrder = speechOrder();
   const ordered = groupByStance(baseOrder, S.stances || {});
+  /* 立场重排之后警长会在自己的座位号上，最后定调就没了——再钉一次 */
+  pinSheriff(ordered);
   /* 沉默的人不发言，但票照投——不能因为不想说就免掉一张票 */
   const silent = ordered.filter(p => (S.stances[p.seat] || {}).kind === 'pass');
   const order = ordered.filter(p => (S.stances[p.seat] || {}).kind !== 'pass');
@@ -8292,7 +8582,7 @@ async function dayPhase(id) {
     }
 
     S.speaking = null; renderSeats();
-    scrollFeed(true);
+    scrollFeed(false);   // 发言结束不强拽底部，把滚动权还给读者
     if (wantExplode) { await beat(700); break; }
     /* 预取下一位。这一位的发言已经入 log、已经开播，趁打字机和 TTS
        在跑，把下一位的请求发出去——网络等待藏在演出后面，观感仍是顺序的。
@@ -8550,9 +8840,9 @@ function speechPrompt(p, i, total) {
   const parts = ['现在是第 ' + S.round + ' 天白天，轮到你发言。', publicState()];
   const priv = privateInfo(p);
   if (priv) parts.push('【只有你知道】\n' + priv);
-  if (p.seat === S.killSeat && S.news.length) {
-    parts.push('【提示】你昨晚是狼人袭击的目标。');
-  }
+  /* 原来这里会给"昨夜被刀但没死"的人一句提示。那等于白送一条验人级信息：
+     被救活的人立刻知道自己昨晚是刀口，而标准局里这必须靠自己推。
+     守卫和女巫各自知道自己的动作，存活者不该有额外视野。 */
   parts.push('【你之前的发言与投票】\n' + memText(p));
   /* 第一顺位发言天然没有信息可接，只给反向禁令（不许说「我先听一轮」）
      它会不知所措。补一条正向策略：允许基于什么下判断。 */
@@ -8951,12 +9241,20 @@ function speechOrder() {
 
   /* 警长白天最后发言：听完所有人再定调，这是警徽的另一半价值。
      不挪座位顺序，只把警长挪到队尾——否则"死左死右"的起始位就乱了。 */
-  if (S.sheriff != null) {
-    const i = order.findIndex(s => s.seat === S.sheriff);
-    if (i >= 0 && i !== order.length - 1) {
-      const [sh] = order.splice(i, 1);
-      order.push(sh);
-    }
+  pinSheriff(order);
+  return order;
+}
+
+/* 把警长钉到队尾。原地改数组，返回同一个引用。
+   注意：立场重排（groupByStance）会在 speechOrder 之后再把队列整体重排一遍，
+   那次重排会把警长冲回自己的座位号，所以排完之后必须再钉一次——
+   否则 1.5 票之外的那半边机制（最后定调）是空的。 */
+function pinSheriff(order) {
+  if (S.sheriff == null || !order || order.length < 2) return order;
+  const i = order.findIndex(s => s.seat === S.sheriff);
+  if (i >= 0 && i !== order.length - 1) {
+    const [sh] = order.splice(i, 1);
+    order.push(sh);
   }
   return order;
 }
@@ -8981,7 +9279,10 @@ async function runVote(id, restrict) {
            真人这一侧直接不给「弃票」这个按钮。 */
         tip: isPKVote ? '平票对决，必须从这两人中选一个' : '选一个人放逐，也可以弃票',
         cands: myAllowed,
-        passLabel: isPKVote ? '' : '弃票'
+        passLabel: isPKVote ? '' : '弃票',
+        /* 候选超过 4 个才会排到第二行，误触邻座的风险从这时才开始，
+           两三个人的 PK 就不折腾玩家点两次了 */
+        confirm: myAllowed.length > 4
       });
     }
   }
@@ -9102,12 +9403,18 @@ function updateLiveTally(shown) {
   const rows = Object.keys(count).map(Number).sort((a, b) => count[b] - count[a]).slice(0, 4);
 
   let box = tbl.querySelector('.rt-live');
-  if (!rows.length) { if (box) box.remove(); return; }
+  if (!rows.length) {
+    if (box) box.remove();
+    tbl.classList.remove('has-live');
+    return;
+  }
   if (!box) {
     box = document.createElement('div');
     box.className = 'rt-live';
     tbl.appendChild(box);
   }
+  /* 票数条落在圆心上，跟"第 N 天 / 存活"抢同一块位置——唱票期间把它压掉 */
+  tbl.classList.add('has-live');
   const max = count[rows[0]];
   box.innerHTML = '<div class="rt-live-title">实时票数</div>' + rows.map(seat => {
     const p = seatOf(seat);
@@ -9122,6 +9429,8 @@ function updateLiveTally(shown) {
 function clearLiveTally() {
   const box = document.querySelector('.rt-live');
   if (box) box.remove();
+  const tbl = document.querySelector('.rt-table');
+  if (tbl) tbl.classList.remove('has-live');
 }
 
 async function resolveVote(picks, id, isPK) {
@@ -9150,7 +9459,9 @@ async function resolveVote(picks, id, isPK) {
   (S.voteStat = S.voteStat || []).push({
     round: S.round, pk: !!isPK, valid,
     top: top ? top.count : 0,
-    cand: tally.size
+    cand: tally.size,
+    /* 平票要看 top.tie，光看票数分不出来：两人同为 3 票时 top 也是 3 */
+    tie: !!(top && top.tie.length > 1)
   });
   if (!top) return { outSeat: null, tie: [] };
 
@@ -9199,7 +9510,7 @@ function renderVoteBox(picks, tally) {
     });
   });
   SFX.gavel();
-  scrollFeed(true);
+  scrollFeed(false);   // 唱票时若用户在回看旧票，不打断
 }
 
 /* ============================================================
@@ -9687,11 +9998,18 @@ function openLadder() {
   const rows = models.map(d => {
     const total = d.wolves + d.goods;
     const winRate = d.wolves + d.goods > 0 ? d.wins / total : 0;
+    /* 阵营分会把一个模型的总胜率盖掉：当狼 70%、当好人 45%，合计 55%，
+       而这两个数字对选模型的人来说意义完全不同。 */
+    const asWolfRate = d.wolves > 0 ? (d.winsAsWolf || 0) / d.wolves : null;
+    const asGoodRate = d.goods > 0 ? (d.winsAsGood || 0) / d.goods : null;
     const wolfRate = d.seats > 0 ? d.wolves / d.seats : 0;
     const leakRate = d.calls > 0 ? d.leaks / d.calls : 0;
     const thinRate = d.calls > 0 ? d.thin / d.calls : 0;
     const yuan = costYuan({ provider: d.provider, model: d.model }, d.prompt, d.completion);
-    return { d, total, winRate, wolfRate, leakRate, thinRate, yuan, trust: d.seats >= 2 };
+    return {
+      d, total, winRate, asWolfRate, asGoodRate, wolfRate, leakRate, thinRate, yuan,
+      trust: d.seats >= 2, est: (d.estCalls || 0) > 0
+    };
   }).sort((a, b) => (b.trust - a.trust) || (b.winRate - a.winRate));
 
   const maxWin = Math.max(0.01, ...rows.map(r => r.winRate));
@@ -9702,6 +10020,7 @@ function openLadder() {
      顺序很关键——玩家打开天梯第一眼该看到的是游戏本身公不公平。 */
   const boards = l.boards || {};
   const bkeys = Object.keys(boards).map(Number).sort((a, b2) => a - b2);
+  const pct = (a, b2) => (b2 > 0 ? Math.round((a || 0) / b2 * 100) : null);
   const balanceHtml = !bkeys.length ? '' :
     '<div class="balance-box">' +
       '<div class="bb-title">板子平衡</div>' +
@@ -9715,15 +10034,34 @@ function openLadder() {
         const verdict = b.games < 4 ? '样本少'
           : flag === 'wolf-heavy' ? '狼人偏强'
           : flag === 'good-heavy' ? '好人偏强' : '平衡';
+        /* 诊断条：只露出有分母的指标。没样本的项直接不出现，
+           不要用 0% 假装"数据说明没问题"。 */
+        const o = b.out || {}, v = b.vote || {}, bm = b.byMode || {}, bs = b.bySheriff || {};
+        const chips = [];
+        const d1 = pct(o.d1Wolf, o.d1);
+        if (d1 != null) chips.push('首日票命中 <b>' + d1 + '%</b>');
+        const pw = pct(o.poisonWolf, o.poison);
+        if (pw != null) chips.push('女巫毒到狼 <b>' + pw + '%</b>');
+        const conc = pct(v.top, v.valid);
+        if (conc != null) chips.push('最高票占比 <b>' + conc + '%</b>');
+        if (v.rounds) chips.push('平票 ' + (v.ties || 0) + '/' + v.rounds);
+        if (bm.play && bm.play.games) chips.push('真人 ' + bm.play.games + ' 局 · 狼 ' + pct(bm.play.wolf, bm.play.games) + '%');
+        if (bm.watch && bm.watch.games) chips.push('观战 ' + bm.watch.games + ' 局 · 狼 ' + pct(bm.watch.wolf, bm.watch.games) + '%');
+        if (bs.on && bs.on.games) chips.push('有警长 ' + bs.on.games + ' 局 · 狼 ' + pct(bs.on.wolf, bs.on.games) + '%');
+        if (bs.off && bs.off.games) chips.push('无警长 ' + bs.off.games + ' 局 · 狼 ' + pct(bs.off.wolf, bs.off.games) + '%');
         return '<div class="bb-row ' + flag + '">' +
           '<span class="bb-n">' + n + ' 人</span>' +
           '<span class="bb-bar"><i style="width:' + Math.round(wolfRate * 100) + '%"></i></span>' +
           '<span class="bb-num">狼 ' + Math.round(wolfRate * 100) + '%</span>' +
           '<span class="bb-sub">' + b.games + ' 局 · 平均 ' + avgDays.toFixed(1) + ' 天</span>' +
           '<span class="bb-tag">' + verdict + '</span>' +
-        '</div>';
+        '</div>' +
+        (chips.length
+          ? '<div class="bb-diag">' + chips.map(c => '<span>' + c + '</span>').join('') + '</div>'
+          : '');
       }).join('') +
-      '<div class="bb-foot">狼人胜率目标区间 40-50%。超出说明某一方有结构性优势，需要调角色或信息量。</div>' +
+      '<div class="bb-foot">狼人胜率目标区间 40-50%。首日票命中率低于 25% 说明好人第一天基本在瞎投；' +
+      '最高票占比低于 40% 说明分票严重，归票机制没起作用。</div>' +
     '</div>';
 
   body.innerHTML =
@@ -9746,14 +10084,18 @@ function openLadder() {
           '<div class="lr-meta">' +
             '<span>出场 ' + r.total + ' 次（狼 ' + r.wolves + ' / 好 ' + r.goods + '）</span>' +
             '<span>胜 ' + r.d.wins + '</span>' +
+            (r.asWolfRate != null && r.asGoodRate != null
+              ? '<span>当狼 ' + Math.round(r.asWolfRate * 100) + '% / 当好人 ' +
+                Math.round(r.asGoodRate * 100) + '%</span>'
+              : '') +
             '<span class="' + (r.leakRate > 0.2 ? 'warn' : '') + '">思考泄漏 ' + Math.round(r.leakRate * 100) + '%</span>' +
             '<span class="' + (r.thinRate > 0.3 ? 'warn' : '') + '">划水 ' + Math.round(r.thinRate * 100) + '%</span>' +
-            '<span>' + (r.d.prompt + r.d.completion).toLocaleString() + ' token</span>' +
+            '<span>' + (r.est ? '≈' : '') + (r.d.prompt + r.d.completion).toLocaleString() + ' token</span>' +
           '</div>' +
         '</div>';
       }).join('') +
     '</div>' +
-    '<div class="hint" style="margin-top:10px">胜率按座位归属统计，跨局累积存在本机；估算费用按公开刊例近似值折算，实际以各家账单为准。</div>';
+    '<div class="hint" style="margin-top:10px">胜率按座位归属统计，跨局累积存在本机。带 ≈ 的 token 是估算值——流式响应不返回用量，只有非流式的调用是精确计数。费用按公开刊例近似折算，实际以各家账单为准。</div>';
   const clear = body.querySelector('#ladderClear');
   if (clear) clear.addEventListener('click', () => {
     writeLadder({ v: 1, games: 0, models: {} });
@@ -10164,7 +10506,14 @@ function finishGame() {
     const st = SPEC_STATS.get(specKey(sp.spec));
     if (st && st.seats.has(sp.seat)) {
       const wolfWon = !goodWon;
-      if ((isWolfRole(sp.role) && wolfWon) || (!isWolfRole(sp.role) && goodWon)) st.wins++;
+      const asWolf = isWolfRole(sp.role);
+      if ((asWolf && wolfWon) || (!asWolf && goodWon)) {
+        st.wins++;
+        /* 分开记：一个模型当狼胜率 70%、当好人胜率 45%，跟"总胜率 55%"
+           是两件完全不同的事，后者会把前者盖掉。 */
+        if (asWolf) st.winsAsWolf++;
+        else st.winsAsGood++;
+      }
     }
   });
   mergeLadder();
